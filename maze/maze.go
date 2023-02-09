@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -28,6 +29,7 @@ type Maze struct {
 	Pixels [][]uint8     `json:"pixels"`
 	Types  map[uint8]int `json:"types"`
 	Boss   point         `json:"boss"`
+	Chests []point       `json:"chests"`
 }
 
 func detectPixelType(img image.Image, rect image.Rectangle) uint8 {
@@ -81,8 +83,11 @@ func (m *Maze) Load(img image.Image) {
 		m.Pixels[y/5] = make([]uint8, img.Bounds().Max.X/5)
 		for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x += 5 {
 			p := detectPixelType(img, image.Rect(x+1, y+1, x+4, y+4))
-			if p == tBOSS {
+			switch p {
+			case tBOSS:
 				m.Boss = point{x / 5, y / 5}
+			case tCHEST:
+				m.Chests = append(m.Chests, point{x / 5, y / 5})
 			}
 			m.Pixels[y/5][x/5] = p
 			m.Types[p]++
@@ -155,6 +160,7 @@ func abs(x int) int {
 }
 
 func heuristic(a, b point) int {
+	//return 0
 	return abs(a.X-b.X) + abs(a.Y-b.Y)
 }
 
@@ -163,55 +169,108 @@ func travelCost(p uint8) int {
 	case tCHEST:
 		return 1
 	case tMONSTER:
-		return 3
+		return 10
+	case tFOUNTAIN:
+		return 1
 	default:
-		return 2
+		return 5
 	}
 }
 
-func (m Maze) FindPathToBossFrom(s *Scribble) []point {
-	start := Item{
-		point{s.Matches[0].X + s.PlayerLocation.X, s.Matches[0].Y + s.PlayerLocation.Y},
+func (m Maze) searchPath(start, end point) []point {
+	startItem := Item{
+		start,
 		0,
 	}
 
 	frontier := pqueue.New(0)
 
-	frontier.Enqueue(&start)
+	frontier.Enqueue(&startItem)
 
 	came_from := make(map[point]point)
 	cost_so_far := make(map[point]int)
 
-	came_from[start.p] = start.p
-	cost_so_far[start.p] = 0
+	came_from[startItem.p] = startItem.p
+	cost_so_far[startItem.p] = 0
 
 	for frontier.Len() > 0 {
 		current := frontier.Dequeue().(*Item)
-		if current.p == m.Boss {
+		if current.p == end {
 			break
 		}
-		fmt.Println("At: ", current.p)
+		//fmt.Println("At: ", current.p)
 		for _, next := range m.neighbors(current.p) {
-			fmt.Println("Checking neighbor: ", next)
+			//fmt.Println("Checking neighbor: ", next)
+			//fmt.Println("Travel Cost: ", travelCost(m.Pixels[next.Y][next.X]))
 			new_cost := cost_so_far[current.p] + travelCost(m.Pixels[next.Y][next.X])
 			_, exists := cost_so_far[next]
+			//fmt.Println("Cost so far, ", cost_so_far[next], " new_cost, ", new_cost)
 			if !exists || new_cost < cost_so_far[next] {
 				cost_so_far[next] = new_cost
-				priority := new_cost + heuristic(next, m.Boss)
+				priority := new_cost + heuristic(next, end)
 				frontier.Enqueue(&Item{p: next, priority: priority})
 				came_from[next] = current.p
 			}
 		}
 	}
-	fmt.Println("Found path, making string")
-	//last := m.Boss
-	path := []point{m.Boss}
-	for last := came_from[m.Boss]; last != start.p; last = came_from[last] {
-		path = append(path, last)
+
+	if _, exists := came_from[end]; exists {
+		fmt.Println("Found path")
+		path := []point{end}
+		for last := came_from[end]; last != startItem.p; last = came_from[last] {
+			path = append(path, last)
+		}
+		path = append(path, startItem.p)
+		return path
+	} else {
+		return make([]point, 0)
 	}
-	path = append(path, start.p)
-	return path
-	//return fmt.Sprint(path)
+}
+
+func (m Maze) FindPathToBossFrom(s *Scribble) []point {
+	return m.searchPath(
+		point{s.Matches[0].X + s.PlayerLocation.X, s.Matches[0].Y + s.PlayerLocation.Y},
+		m.Boss)
+}
+
+type ChestDistance struct {
+	location point
+	distance int
+}
+
+type ChestList []ChestDistance
+
+func (c ChestList) Len() int           { return len(c) }
+func (c ChestList) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
+func (c ChestList) Less(i, j int) bool { return c[i].distance < c[j].distance }
+
+func (m Maze) FindPathToChestFrom(s *Scribble) []point {
+	player := point{s.Matches[0].X + s.PlayerLocation.X, s.Matches[0].Y + s.PlayerLocation.Y}
+
+	list := make(ChestList, len(m.Chests))
+
+	for c := range m.Chests {
+		list[c] = ChestDistance{
+			m.Chests[c],
+			heuristic(player, m.Chests[c]),
+		}
+	}
+
+	sort.Sort(list)
+	fmt.Println(list)
+	return m.searchPath(player, list[0].location)
+
+}
+
+func (m Maze) FindPathTo(what string, s *Scribble) []point {
+	switch what {
+	case "boss":
+		return m.FindPathToBossFrom(s)
+	case "chest":
+		return m.FindPathToChestFrom(s)
+	default:
+		return make([]point, 0)
+	}
 }
 
 func (m Maze) ColorModel() color.Model {

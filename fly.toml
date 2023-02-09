@@ -11,6 +11,7 @@ processes = []
 
 [env]
   PORT = "8080"
+  GO_ENV = "production"
 
 [experimental]
   auto_rollback = true

@@ -63,9 +63,10 @@ func (t TGBot) SendCommand(cmd string, body interface{}) (*http.Response, error)
 
 func (t TGBot) Respond(m TGMessage, s string) (*http.Response, error) {
 	return t.SendCommand("sendMessage", struct {
-		ChatID int64  `json:"chat_id"`
-		Text   string `json:"text"`
-	}{m.Chat.ID, s})
+		ChatID    int64  `json:"chat_id"`
+		Text      string `json:"text"`
+		ParseMode string `json:"parse_mode"`
+	}{m.Chat.ID, s, "MarkdownV2"})
 }
 
 func (t TGBot) SetWebhook(url string) (*http.Response, error) {
@@ -255,6 +256,11 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 			bot.Respond(body.Message, "Failed to save map")
 		}
 
+		err = redisClient.Del(ctx, fmt.Sprintf("%d-Scribble", body.Message.Chat.ID)).Err()
+		if err != nil {
+			fmt.Println(err)
+		}
+
 	} else if strings.Contains(body.Message.Text, "You stopped and tried to mark your way on paper.") {
 
 		sections := strings.Split(body.Message.Text, "\n\n")
@@ -263,7 +269,7 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 		mazeJson, err := redisClient.Get(ctx, fmt.Sprint(body.Message.Chat.ID)).Result()
 		if err != nil {
 			if err == redis.Nil {
-				bot.Respond(body.Message, "No map found, please forward map before sending a scribble.")
+				bot.Respond(body.Message, "No map found, please forward map before sending a scribble")
 			} else {
 				bot.Respond(body.Message, "Error fetching map")
 				fmt.Println("error fetching map from redis", err)
@@ -321,6 +327,13 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 				ChatID int64 `json:"chat_id"`
 			}{body.Message.Chat.ID}, sendPic)
 
+			if len(matches.Matches) == 1 {
+				_, err := bot.Respond(body.Message, "*Location Found\\!*\nTry /path to find a path to the boss or /path\\_chest for a path to the nearest chest\\.")
+				if err != nil {
+					fmt.Println(err)
+				}
+			}
+
 			matchJson, err := json.Marshal(matches)
 			if err != nil {
 				fmt.Println(err)
@@ -345,17 +358,22 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 
 		scribble := &cwmaze.Scribble{}
 		if err := getFromRedis(scribble, fmt.Sprintf("%d-Scribble", body.Message.Chat.ID)); err != nil {
-			bot.Respond(body.Message, "No scribble found, please forward scribble before finding a path to boss.")
+			bot.Respond(body.Message, "No scribble found, please forward scribble before finding a path to boss")
 			return
 		}
 
 		if len(scribble.Matches) > 1 {
-			bot.Respond(body.Message, fmt.Sprintf("Scribble matches %d locations in map.  Must be 1 to find path.", len(scribble.Matches)))
+			bot.Respond(body.Message, fmt.Sprintf("Scribble matches %d locations in map.  Must be 1 to find path", len(scribble.Matches)))
 			return
 		}
 
-		//bot.Respond(body.Message, "Not implemented")
-		path := maze.FindPathToBossFrom(scribble)
+		thingToFind := "boss"
+		if strings.HasSuffix(body.Message.Text, "chest") {
+			thingToFind = "chest"
+		}
+
+		path := maze.FindPathTo(thingToFind, scribble)
+
 		// create the composite image with the map and scribbles highlighted
 		composite := image.NewRGBA(image.Rect(0, 0, maze.Bounds().Dx(), maze.Bounds().Dy()))
 		draw.Draw(composite, composite.Bounds(), maze, maze.Bounds().Bounds().Min, draw.Src)
@@ -450,9 +468,13 @@ func main() {
 	fmt.Println(pong, err)
 
 	bot = TGBot{API_KEY: getEnv("TG_API_KEY", "abcd:1234")}
-	_, err = bot.SetWebhook("https://happydungeon.fly.dev/" + getEnv("TG_WEBHOOK", ""))
-	if err != nil {
-		fmt.Println(err)
+	if getEnv("GO_ENV", "development") == "production" {
+		_, err = bot.SetWebhook("https://happydungeon.fly.dev/" + getEnv("TG_WEBHOOK", ""))
+		if err != nil {
+			fmt.Println(err)
+		} else {
+			fmt.Println("Webhook set")
+		}
 	}
 
 	http.ListenAndServe(":"+port, http.HandlerFunc(Handler))

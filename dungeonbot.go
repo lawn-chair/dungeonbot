@@ -164,9 +164,7 @@ type TGResponse[T any] struct {
 	Result T    `json:"result"`
 }
 
-// Create a struct that mimics the webhook response body
-// https://core.telegram.org/bots/api#update
-type webhookReqBody struct {
+type TGUpdate struct {
 	Message TGMessage `json:"message"`
 }
 
@@ -187,7 +185,7 @@ func getFullSizeImage(photos []TGPhotoSize) string {
 // This handler is called everytime telegram sends us a webhook event
 func Handler(res http.ResponseWriter, req *http.Request) {
 	// First, decode the JSON response body
-	body := &webhookReqBody{}
+	body := &TGUpdate{}
 
 	if err := json.NewDecoder(req.Body).Decode(body); err != nil {
 		fmt.Println("could not decode request body", err)

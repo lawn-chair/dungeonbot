@@ -321,9 +321,65 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 				ChatID int64 `json:"chat_id"`
 			}{body.Message.Chat.ID}, sendPic)
 
+			matchJson, err := json.Marshal(matches)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			err = redisClient.Set(ctx, fmt.Sprintf("%d-Scribble", body.Message.Chat.ID), matchJson, 0).Err()
+			if err != nil {
+				fmt.Println(err)
+				bot.Respond(body.Message, "Failed to save scribble")
+			}
+
 		} else {
 			bot.Respond(body.Message, "There seems to be a problem with your scribble")
 		}
+
+	} else if strings.HasPrefix(body.Message.Text, "/path") {
+		maze := &cwmaze.Maze{}
+		if err := getFromRedis(maze, fmt.Sprint(body.Message.Chat.ID)); err != nil {
+			bot.Respond(body.Message, "No map found, please forward map before finding path")
+			return
+		}
+
+		scribble := &cwmaze.Scribble{}
+		if err := getFromRedis(scribble, fmt.Sprintf("%d-Scribble", body.Message.Chat.ID)); err != nil {
+			bot.Respond(body.Message, "No scribble found, please forward scribble before finding a path to boss.")
+			return
+		}
+
+		if len(scribble.Matches) > 1 {
+			bot.Respond(body.Message, fmt.Sprintf("Scribble matches %d locations in map.  Must be 1 to find path.", len(scribble.Matches)))
+			return
+		}
+
+		//bot.Respond(body.Message, "Not implemented")
+		path := maze.FindPathToBossFrom(scribble)
+		// create the composite image with the map and scribbles highlighted
+		composite := image.NewRGBA(image.Rect(0, 0, maze.Bounds().Dx(), maze.Bounds().Dy()))
+		draw.Draw(composite, composite.Bounds(), maze, maze.Bounds().Bounds().Min, draw.Src)
+
+		for pixel := range path {
+			drawHLine(composite, color.RGBA{255, 20, 255, 255},
+				path[pixel].X*5+2, path[pixel].Y*5+3, path[pixel].X*5+4)
+		}
+
+		buf := new(bytes.Buffer)
+		png.Encode(buf, composite)
+
+		sendPic := []SendFile{
+			{
+				"photo",
+				"path.png",
+				buf,
+			},
+		}
+		bot.SendFiles("sendPhoto", struct {
+			ChatID int64 `json:"chat_id"`
+		}{body.Message.Chat.ID}, sendPic)
+
+		//bot.Respond(body.Message, fmt.Sprint(path))
 
 	} else {
 		bot.Respond(body.Message, "Try forwarding a map or scribble of a dungeon")
@@ -331,6 +387,21 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 
 	// log a confirmation message if the message is sent successfully
 	fmt.Println("reply sent")
+}
+
+func getFromRedis[T any](obj *T, key string) error {
+	jsonVal, err := redisClient.Get(ctx, key).Result()
+	if err != nil {
+		fmt.Printf("error fetching %s from redis: %s\n", key, err)
+		return err
+	}
+
+	if err := json.NewDecoder(strings.NewReader(jsonVal)).Decode(obj); err != nil {
+		fmt.Println("could not decode request body", err)
+		return err
+	}
+
+	return nil
 }
 
 // HLine draws a horizontal line

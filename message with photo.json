@@ -1,0 +1,59 @@
+{
+    "update_id": 95274766,
+    "message": {
+        "message_id": 7,
+        "from": {
+            "id": 174396079,
+            "is_bot": false,
+            "first_name": "Brent",
+            "last_name": "Rahn (homebrew44)",
+            "username": "homebrew44",
+            "language_code": "en"
+        },
+        "chat": {
+            "id": 174396079,
+            "first_name": "Brent",
+            "last_name": "Rahn (homebrew44)",
+            "username": "homebrew44",
+            "type": "private"
+        },
+        "date": 1675634576,
+        "forward_from": {
+            "id": 5233916499,
+            "is_bot": true,
+            "first_name": "Chat Wars Elite",
+            "username": "ChatWarsEliteBot"
+        },
+        "forward_date": 1670616975,
+        "photo": [
+            {
+                "file_id": "AgACAgIAAxkBAAMHY-AnkFHmIOldr4xFuX5HZ761-n0AAuzEMRvibphIS7hdZLFkFekBAAMCAANzAAMuBA",
+                "file_unique_id": "AQAD7MQxG-JumEh4",
+                "file_size": 3096,
+                "width": 90,
+                "height": 90
+            },
+            {
+                "file_id": "AgACAgIAAxkBAAMHY-AnkFHmIOldr4xFuX5HZ761-n0AAuzEMRvibphIS7hdZLFkFekBAAMCAANtAAMuBA",
+                "file_unique_id": "AQAD7MQxG-JumEhy",
+                "file_size": 70959,
+                "width": 320,
+                "height": 320
+            },
+            {
+                "file_id": "AgACAgIAAxkBAAMHY-AnkFHmIOldr4xFuX5HZ761-n0AAuzEMRvibphIS7hdZLFkFekBAAMCAAN5AAMuBA",
+                "file_unique_id": "AQAD7MQxG-JumEh-",
+                "file_size": 302099,
+                "width": 805,
+                "height": 805
+            },
+            {
+                "file_id": "AgACAgIAAxkBAAMHY-AnkFHmIOldr4xFuX5HZ761-n0AAuzEMRvibphIS7hdZLFkFekBAAMCAAN4AAMuBA",
+                "file_unique_id": "AQAD7MQxG-JumEh9",
+                "file_size": 326680,
+                "width": 800,
+                "height": 800
+            }
+        ]
+    }
+}

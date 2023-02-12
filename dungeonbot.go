@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -73,6 +74,11 @@ func (t TGBot) SetWebhook(url string) (*http.Response, error) {
 	return t.SendCommand("setWebhook", struct {
 		Url string `json:"url"`
 	}{url})
+}
+
+func EscapeString(s string) string {
+	re := regexp.MustCompile(`(?m)([_\*\[\]()~\x60>#+\-=|{}!\.])`)
+	return re.ReplaceAllString(s, "\\$1")
 }
 
 type SendFile struct {
@@ -227,7 +233,6 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 		}
 
 		m.Load(mazeImage)
-		bot.Respond(body.Message, m.String())
 
 		buf := new(bytes.Buffer)
 		png.Encode(buf, m)
@@ -242,6 +247,8 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 		bot.SendFiles("sendPhoto", struct {
 			ChatID int64 `json:"chat_id"`
 		}{body.Message.Chat.ID}, sendMaze)
+		fmt.Println("m.String(): ", m.String(), m)
+		bot.Respond(body.Message, EscapeString(m.String()))
 
 		mazeJson, err := json.Marshal(m)
 		if err != nil {
@@ -370,7 +377,14 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 			thingToFind = "chest"
 		}
 
-		path := maze.FindPathTo(thingToFind, scribble)
+		path, err := maze.FindPathTo(thingToFind, scribble)
+		if err != nil {
+			bot.Respond(body.Message, fmt.Sprint(err))
+		}
+
+		if len(path) == 0 {
+			bot.Respond(body.Message, "Sorry, no path found with step limits")
+		}
 
 		// create the composite image with the map and scribbles highlighted
 		composite := image.NewRGBA(image.Rect(0, 0, maze.Bounds().Dx(), maze.Bounds().Dy()))

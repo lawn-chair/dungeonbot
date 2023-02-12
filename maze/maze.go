@@ -1,6 +1,7 @@
 package cwmaze
 
 import (
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -26,10 +27,11 @@ const (
 
 // Represents a Maze, call Load with an image to initialize
 type Maze struct {
-	Pixels [][]uint8     `json:"pixels"`
-	Types  map[uint8]int `json:"types"`
-	Boss   point         `json:"boss"`
-	Chests []point       `json:"chests"`
+	Pixels    [][]uint8     `json:"pixels"`
+	Types     map[uint8]int `json:"types"`
+	Boss      point         `json:"boss"`
+	Chests    []point       `json:"chests"`
+	Fountains []point       `json:"fountains"`
 }
 
 func detectPixelType(img image.Image, rect image.Rectangle) uint8 {
@@ -83,11 +85,14 @@ func (m *Maze) Load(img image.Image) {
 		m.Pixels[y/5] = make([]uint8, img.Bounds().Max.X/5)
 		for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x += 5 {
 			p := detectPixelType(img, image.Rect(x+1, y+1, x+4, y+4))
+			here := point{x / 5, y / 5}
 			switch p {
 			case tBOSS:
-				m.Boss = point{x / 5, y / 5}
+				m.Boss = here
 			case tCHEST:
-				m.Chests = append(m.Chests, point{x / 5, y / 5})
+				m.Chests = append(m.Chests, here)
+			case tFOUNTAIN:
+				m.Fountains = append(m.Fountains, here)
 			}
 			m.Pixels[y/5][x/5] = p
 			m.Types[p]++
@@ -160,7 +165,6 @@ func abs(x int) int {
 }
 
 func heuristic(a, b point) int {
-	//return 0
 	return abs(a.X-b.X) + abs(a.Y-b.Y)
 }
 
@@ -177,7 +181,7 @@ func travelCost(p uint8) int {
 	}
 }
 
-func (m Maze) searchPath(start, end point) []point {
+func (m Maze) searchPathAStar(start, end point) []point {
 	startItem := Item{
 		start,
 		0,
@@ -204,6 +208,7 @@ func (m Maze) searchPath(start, end point) []point {
 			//fmt.Println("Travel Cost: ", travelCost(m.Pixels[next.Y][next.X]))
 			new_cost := cost_so_far[current.p] + travelCost(m.Pixels[next.Y][next.X])
 			_, exists := cost_so_far[next]
+
 			//fmt.Println("Cost so far, ", cost_so_far[next], " new_cost, ", new_cost)
 			if !exists || new_cost < cost_so_far[next] {
 				cost_so_far[next] = new_cost
@@ -215,7 +220,7 @@ func (m Maze) searchPath(start, end point) []point {
 	}
 
 	if _, exists := came_from[end]; exists {
-		fmt.Println("Found path")
+		//fmt.Println("Found path")
 		path := []point{end}
 		for last := came_from[end]; last != startItem.p; last = came_from[last] {
 			path = append(path, last)
@@ -227,30 +232,172 @@ func (m Maze) searchPath(start, end point) []point {
 	}
 }
 
-func (m Maze) FindPathToBossFrom(s *Scribble) []point {
-	return m.searchPath(
-		point{s.Matches[0].X + s.PlayerLocation.X, s.Matches[0].Y + s.PlayerLocation.Y},
-		m.Boss)
+type fullPath struct {
+	a []point
+	b []point
 }
 
-type ChestDistance struct {
+func filter[T any](ss []T, test func(T) bool) (ret []T) {
+	for _, s := range ss {
+		if test(s) {
+			ret = append(ret, s)
+		}
+	}
+	return
+}
+
+type searchState struct {
+	end     point
+	path    []point
+	visited map[point]struct{}
+}
+
+func (m Maze) searchPathWithSteps(start, end point, steps int) (final []point) {
+	if len(m.Fountains) == 0 {
+		return make([]point, 0)
+	}
+	list := make(itemList, len(m.Fountains))
+	//counter := 0
+	stack := make([]searchState, 1)
+
+	stack[0] = searchState{end, make([]point, 0), make(map[point]struct{})}
+
+	solutions := make([][]point, 0)
+	for len(stack) > 0 {
+		//fmt.Println("Stack length: ", len(stack))
+		state := stack[len(stack)-1]
+		stack = stack[0 : len(stack)-1]
+
+		for i := range m.Fountains {
+			list[i] = itemDistance{
+				m.Fountains[i],
+				heuristic(state.end, m.Fountains[i]),
+			}
+		}
+		sort.Sort(list)
+
+		filteredList := filter(list, func(item itemDistance) bool { _, visited := state.visited[item.location]; return !visited })
+		filteredList = filter(filteredList, func(item itemDistance) bool { return item.distance > 8 })
+
+		//fmt.Println(filteredList)
+
+		const PATHS_TO_TRY = 8
+		paths := make([]fullPath, PATHS_TO_TRY)
+
+		for i := 0; i < PATHS_TO_TRY; i++ {
+			paths[i].a = m.searchPathAStar(state.end, filteredList[i].location)
+			paths[i].b = m.searchPathAStar(start, filteredList[i].location)
+		}
+
+		//lowestTotal := 10000
+		//var best fullPath
+		for i := 0; i < PATHS_TO_TRY; i++ {
+			//fmt.Println("Path from: ", state.end, " to: ", filteredList[i].location)
+			//fmt.Println("fountain: ", filteredList[i].location, "len a: ", len(paths[i].a), " len b: ", len(paths[i].b))
+			if len(paths[i].a) > steps || len(paths[i].a) == 0 || len(paths[i].b) == 0 {
+				continue
+			}
+
+			if len(paths[i].b) <= steps {
+				fmt.Println("winner")
+				solution := make([]point, 0, len(state.path)+len(paths[i].a)+len(paths[i].b))
+				solution = append(solution, state.path...)
+				solution = append(solution, paths[i].a...)
+				solution = append(solution, paths[i].b...)
+				solutions = append(solutions, solution)
+				/*
+					final = append(final, state.path...)
+					final = append(final, paths[i].a...)
+					final = append(final, paths[i].b...)
+					return
+				*/
+			} else {
+				state.visited[filteredList[i].location] = struct{}{}
+				//fmt.Println("qualifying path")
+				//if len(paths[i].a)+len(paths[i].b) < lowestTotal {
+				//lowestTotal = len(paths[i].a) + len(paths[i].b)
+				//best = paths[i]
+				//fmt.Println(best.a[0], filteredList[i])]
+				tmp := make([]point, 0, len(state.path)+len(paths[i].a))
+				tmp = append(tmp, state.path...)
+				tmp = append(tmp, paths[i].a...)
+				stack = append(stack, searchState{
+					filteredList[i].location,
+					tmp,
+					state.visited})
+
+			}
+
+			//}
+
+		}
+
+		/*
+			fmt.Println(best.a)
+			if len(best.a) == 0 {
+				return
+				//return make([]point, 0)
+			}
+			final = append(final, best.a...)
+			end = best.a[len(best.a)-1]
+			counter += 1
+			if counter > 50 {
+				fmt.Println("counter expired")
+				final = append(final, best.b...)
+				return
+				//return make([]point, 0)
+			}
+		*/
+	}
+	fmt.Println("Solutions: ", len(solutions))
+	if len(solutions) >= 1 {
+		var bestPath []point
+		shortest := 1000
+		for _, path := range solutions {
+			fmt.Println(len(path))
+			if len(path) < shortest {
+				shortest = len(path)
+				bestPath = path
+			}
+		}
+		return bestPath
+	}
+
+	return make([]point, 0)
+}
+
+func (m Maze) FindPathToBossFrom(s *Scribble) ([]point, error) {
+	value := m.searchPathWithSteps(
+		point{s.Matches[0].X + s.PlayerLocation.X, s.Matches[0].Y + s.PlayerLocation.Y},
+		m.Boss, 35)
+	if len(value) == 0 {
+		value = m.searchPathAStar(
+			point{s.Matches[0].X + s.PlayerLocation.X, s.Matches[0].Y + s.PlayerLocation.Y},
+			m.Boss)
+		return value, errors.New("no path found when counting steps, providing shortest path")
+	}
+
+	return value, nil
+}
+
+type itemDistance struct {
 	location point
 	distance int
 }
 
-type ChestList []ChestDistance
+type itemList []itemDistance
 
-func (c ChestList) Len() int           { return len(c) }
-func (c ChestList) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
-func (c ChestList) Less(i, j int) bool { return c[i].distance < c[j].distance }
+func (c itemList) Len() int           { return len(c) }
+func (c itemList) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
+func (c itemList) Less(i, j int) bool { return c[i].distance < c[j].distance }
 
 func (m Maze) FindPathToChestFrom(s *Scribble) []point {
 	player := point{s.Matches[0].X + s.PlayerLocation.X, s.Matches[0].Y + s.PlayerLocation.Y}
 
-	list := make(ChestList, len(m.Chests))
+	list := make(itemList, len(m.Chests))
 
 	for c := range m.Chests {
-		list[c] = ChestDistance{
+		list[c] = itemDistance{
 			m.Chests[c],
 			heuristic(player, m.Chests[c]),
 		}
@@ -258,18 +405,18 @@ func (m Maze) FindPathToChestFrom(s *Scribble) []point {
 
 	sort.Sort(list)
 	fmt.Println(list)
-	return m.searchPath(player, list[0].location)
+	return m.searchPathAStar(player, list[0].location)
 
 }
 
-func (m Maze) FindPathTo(what string, s *Scribble) []point {
+func (m Maze) FindPathTo(what string, s *Scribble) ([]point, error) {
 	switch what {
 	case "boss":
 		return m.FindPathToBossFrom(s)
 	case "chest":
-		return m.FindPathToChestFrom(s)
+		return m.FindPathToChestFrom(s), nil
 	default:
-		return make([]point, 0)
+		return make([]point, 0), nil
 	}
 }
 

@@ -333,7 +333,7 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 			}{body.Message.Chat.ID}, sendPic)
 
 			if len(matches.Matches) == 1 {
-				_, err := bot.Respond(body.Message, "*Location Found\\!*\nTry /path to find a path to the boss or /path\\_chest for a path to the nearest chest\\.")
+				_, err := bot.Respond(body.Message, "*Location Found\\!* Try these commands for more help:\n\n/path to find a path to the boss using fountains\n/path\\_chest for a path to the nearest chest\n/path_simple for the shortest path to the boss, ignoring steps")
 				if err != nil {
 					fmt.Println(err)
 				}

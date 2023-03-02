@@ -120,7 +120,7 @@ func (m Maze) SearchByScribble(scribble string) Scribble {
 					//fmt.Printf("{%d, %d} %d == %d\n", x+sx, y+sy, m.Pixels[y+sy][x+sx], state.scribble[sy][sx])
 					if state.Points[sy][sx] != 255 &&
 						state.Points[sy][sx] != m.Pixels[y+sy][x+sx] {
-						//fmt.Println("no match!")
+
 						// player location matches anything but wall
 						// fountain and chest look the same in a scribble
 						if !((state.Points[sy][sx] == 254 && m.Pixels[y+sy][x+sx] != tWALL) ||

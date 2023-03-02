@@ -141,6 +141,23 @@ func (t TGBot) SendFiles(cmd string, body interface{}, files []SendFile) (*http.
 	return res, nil
 }
 
+func (t TGBot) RespondPhoto(m TGMessage, i image.Image) (*http.Response, error) {
+	buf := new(bytes.Buffer)
+	png.Encode(buf, i)
+
+	sendPic := []SendFile{
+		{
+			"photo",
+			"photo.png",
+			buf,
+		},
+	}
+
+	return bot.SendFiles("sendPhoto", struct {
+		ChatID int64 `json:"chat_id"`
+	}{m.Chat.ID}, sendPic)
+}
+
 type TGFile struct {
 	FileID   string `json:"file_id"`
 	FilePath string `json:"file_path"`
@@ -234,19 +251,8 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 
 		m.Load(mazeImage)
 
-		buf := new(bytes.Buffer)
-		png.Encode(buf, m)
+		bot.RespondPhoto(body.Message, m)
 
-		sendMaze := []SendFile{
-			{
-				"photo",
-				"maze.png",
-				buf,
-			},
-		}
-		bot.SendFiles("sendPhoto", struct {
-			ChatID int64 `json:"chat_id"`
-		}{body.Message.Chat.ID}, sendMaze)
 		fmt.Println("m.String(): ", m.String(), m)
 		bot.Respond(body.Message, EscapeString(m.String()))
 
@@ -318,19 +324,7 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 					match.X*5+matches.Bounds().Dx(), match.Y*5+matches.Bounds().Dy())
 			}
 
-			buf := new(bytes.Buffer)
-			png.Encode(buf, composite)
-
-			sendPic := []SendFile{
-				{
-					"photo",
-					"matches.png",
-					buf,
-				},
-			}
-			bot.SendFiles("sendPhoto", struct {
-				ChatID int64 `json:"chat_id"`
-			}{body.Message.Chat.ID}, sendPic)
+			bot.RespondPhoto(body.Message, composite)
 
 			if len(matches.Matches) == 1 {
 				_, err := bot.Respond(body.Message, "*Location Found\\!* Try these commands for more help:\n\n\\/path to find a path to the boss using fountains\n\\/path\\_chest for a path to the nearest chest\n\\/path\\_simple for the shortest path to the boss, ignoring steps")
@@ -399,21 +393,7 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 				path[pixel].X*5+2, path[pixel].Y*5+3, path[pixel].X*5+4)
 		}
 
-		buf := new(bytes.Buffer)
-		png.Encode(buf, composite)
-
-		sendPic := []SendFile{
-			{
-				"photo",
-				"path.png",
-				buf,
-			},
-		}
-		bot.SendFiles("sendPhoto", struct {
-			ChatID int64 `json:"chat_id"`
-		}{body.Message.Chat.ID}, sendPic)
-
-		//bot.Respond(body.Message, fmt.Sprint(path))
+		bot.RespondPhoto(body.Message, composite)
 
 	} else {
 		bot.Respond(body.Message, "Try forwarding a map or scribble of a dungeon")

@@ -121,9 +121,10 @@ func (m Maze) SearchByScribble(scribble string) Scribble {
 					if state.Points[sy][sx] != 255 &&
 						state.Points[sy][sx] != m.Pixels[y+sy][x+sx] {
 						//fmt.Println("no match!")
+						// player location matches anything but wall
 						// fountain and chest look the same in a scribble
-						if !(state.Points[sy][sx] == tFOUNTAIN &&
-							m.Pixels[y+sy][x+sx] == tCHEST) {
+						if !((state.Points[sy][sx] == 254 && m.Pixels[y+sy][x+sx] != tWALL) ||
+							(state.Points[sy][sx] == tFOUNTAIN && m.Pixels[y+sy][x+sx] == tCHEST)) {
 							match = false
 							break
 						}
@@ -415,6 +416,9 @@ func (m Maze) FindPathTo(what string, s *Scribble) ([]point, error) {
 		return m.FindPathToBossFrom(s)
 	case "chest":
 		return m.FindPathToChestFrom(s), nil
+	case "shortest":
+		player := point{s.Matches[0].X + s.PlayerLocation.X, s.Matches[0].Y + s.PlayerLocation.Y}
+		return m.searchPathAStar(player, m.Boss), nil
 	default:
 		return make([]point, 0), nil
 	}
@@ -515,7 +519,7 @@ func parseScribble(scribble string) Scribble {
 			case '\u2b1c':
 				scrib[i][j] = tPATH
 			case '\U0001f7e8':
-				scrib[i][j] = 255 // player overwrites other types
+				scrib[i][j] = 254 // player overwrites other types
 				playerLocation = point{j, i}
 			case '\U0001f7e9':
 				scrib[i][j] = tFOUNTAIN

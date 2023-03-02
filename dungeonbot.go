@@ -333,10 +333,12 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 			}{body.Message.Chat.ID}, sendPic)
 
 			if len(matches.Matches) == 1 {
-				_, err := bot.Respond(body.Message, "*Location Found\\!* Try these commands for more help:\n\n/path to find a path to the boss using fountains\n/path\\_chest for a path to the nearest chest\n/path_simple for the shortest path to the boss, ignoring steps")
+				_, err := bot.Respond(body.Message, "*Location Found\\!* Try these commands for more help:\n\n\\/path to find a path to the boss using fountains\n\\/path\\_chest for a path to the nearest chest\n\\/path\\_simple for the shortest path to the boss, ignoring steps")
 				if err != nil {
 					fmt.Println(err)
 				}
+			} else {
+				bot.Respond(body.Message, fmt.Sprintf("Found %d locations matching scribble", len(matches.Matches)))
 			}
 
 			matchJson, err := json.Marshal(matches)
@@ -375,6 +377,8 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 		thingToFind := "boss"
 		if strings.HasSuffix(body.Message.Text, "chest") {
 			thingToFind = "chest"
+		} else if strings.HasSuffix(body.Message.Text, "simple") {
+			thingToFind = "shortest"
 		}
 
 		path, err := maze.FindPathTo(thingToFind, scribble)

@@ -458,7 +458,7 @@ func mazeColorMap(val uint8) color.Color {
 	case tMONSTER:
 		return color.RGBA{140, 120, 255, 255}
 	case tFAMOUS:
-		return color.RGBA{50, 50, 255, 255}
+		return color.RGBA{200, 195, 155, 255}
 	default:
 		return color.RGBA{251, 4, 253, 255}
 	}

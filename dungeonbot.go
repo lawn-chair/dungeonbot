@@ -319,9 +319,14 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 			composite := image.NewRGBA(image.Rect(0, 0, maze.Bounds().Dx(), maze.Bounds().Dy()))
 			draw.Draw(composite, composite.Bounds(), maze, maze.Bounds().Bounds().Min, draw.Src)
 			for _, match := range matches.Matches {
-				drawRect(composite, color.RGBA{255, 25, 25, 255},
-					match.X*5, match.Y*5,
-					match.X*5+matches.Bounds().Dx(), match.Y*5+matches.Bounds().Dy())
+				matchRect := image.Rect(match.X*5, match.Y*5, match.X*5+matches.Bounds().Dx(), match.Y*5+matches.Bounds().Dy())
+				draw.Draw(composite, matchRect, &image.Uniform{color.NRGBA{100, 255, 100, 150}}, composite.Bounds().Min, draw.Over)
+
+				playerX := (match.X + matches.PlayerLocation.X) * 5
+				playerY := (match.Y + matches.PlayerLocation.Y) * 5
+				playerRect := image.Rect(playerX, playerY, playerX+5, playerY+5)
+				draw.Draw(composite, playerRect, &image.Uniform{color.RGBA{255, 20, 255, 255}}, composite.Bounds().Min, draw.Src)
+
 			}
 
 			bot.RespondPhoto(body.Message, composite)
@@ -331,6 +336,7 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 				if err != nil {
 					fmt.Println(err)
 				}
+				bot.Respond(body.Message, fmt.Sprintf("Player at: \\{%d, %d\\}", matches.Matches[0].X+matches.PlayerLocation.X, matches.Matches[0].Y+matches.PlayerLocation.Y))
 			} else {
 				bot.Respond(body.Message, fmt.Sprintf("Found %d locations matching scribble", len(matches.Matches)))
 			}
@@ -388,6 +394,11 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 		composite := image.NewRGBA(image.Rect(0, 0, maze.Bounds().Dx(), maze.Bounds().Dy()))
 		draw.Draw(composite, composite.Bounds(), maze, maze.Bounds().Bounds().Min, draw.Src)
 
+		playerX := (scribble.Matches[0].X + scribble.PlayerLocation.X) * 5
+		playerY := (scribble.Matches[0].Y + scribble.PlayerLocation.Y) * 5
+		playerRect := image.Rect(playerX, playerY, playerX+5, playerY+5)
+		draw.Draw(composite, playerRect, &image.Uniform{color.RGBA{255, 20, 255, 255}}, composite.Bounds().Min, draw.Src)
+
 		for pixel := range path {
 			drawHLine(composite, color.RGBA{255, 20, 255, 255},
 				path[pixel].X*5+2, path[pixel].Y*5+3, path[pixel].X*5+4)
@@ -424,22 +435,6 @@ func drawHLine(img *image.RGBA, col color.Color, x1, y, x2 int) {
 		img.Set(x1, y, col)
 		img.Set(x1, y-1, col)
 	}
-}
-
-// VLine draws a veritcal line
-func drawVLine(img *image.RGBA, col color.Color, x, y1, y2 int) {
-	for ; y1 <= y2; y1++ {
-		img.Set(x, y1, col)
-		img.Set(x-1, y1, col)
-	}
-}
-
-// Rect draws a rectangle utilizing HLine() and VLine()
-func drawRect(img *image.RGBA, col color.Color, x1, y1, x2, y2 int) {
-	drawHLine(img, col, x1, y1, x2)
-	drawHLine(img, col, x1, y2, x2)
-	drawVLine(img, col, x1, y1, y2)
-	drawVLine(img, col, x2, y1, y2)
 }
 
 func getEnv(key string, fallback string) string {

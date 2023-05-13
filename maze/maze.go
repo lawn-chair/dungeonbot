@@ -174,9 +174,9 @@ func travelCost(p uint8) int {
 	case tCHEST:
 		return 1
 	case tMONSTER:
-		return 10
-	case tFOUNTAIN:
 		return 1
+	case tFOUNTAIN:
+		return 4
 	default:
 		return 5
 	}
@@ -278,11 +278,11 @@ func (m Maze) searchPathWithSteps(start, end point, steps int) (final []point) {
 		sort.Sort(list)
 
 		filteredList := filter(list, func(item itemDistance) bool { _, visited := state.visited[item.location]; return !visited })
-		filteredList = filter(filteredList, func(item itemDistance) bool { return item.distance > 8 })
+		//filteredList = filter(filteredList, func(item itemDistance) bool { return item.distance > 3 })
 
 		//fmt.Println(filteredList)
 
-		const PATHS_TO_TRY = 8
+		const PATHS_TO_TRY = 20
 		paths := make([]fullPath, PATHS_TO_TRY)
 
 		for i := 0; i < PATHS_TO_TRY; i++ {
@@ -295,7 +295,9 @@ func (m Maze) searchPathWithSteps(start, end point, steps int) (final []point) {
 		for i := 0; i < PATHS_TO_TRY; i++ {
 			//fmt.Println("Path from: ", state.end, " to: ", filteredList[i].location)
 			//fmt.Println("fountain: ", filteredList[i].location, "len a: ", len(paths[i].a), " len b: ", len(paths[i].b))
-			if len(paths[i].a) > steps || len(paths[i].a) == 0 || len(paths[i].b) == 0 {
+
+			// steps+1 is because path includes the current location
+			if len(paths[i].a) > (steps+1) || len(paths[i].a) == 0 || len(paths[i].b) == 0 {
 				continue
 			}
 

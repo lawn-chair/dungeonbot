@@ -290,8 +290,6 @@ func (m Maze) searchPathWithSteps(start, end point, steps int) (final []point) {
 			paths[i].b = m.searchPathAStar(start, filteredList[i].location)
 		}
 
-		//lowestTotal := 10000
-		//var best fullPath
 		for i := 0; i < PATHS_TO_TRY; i++ {
 			//fmt.Println("Path from: ", state.end, " to: ", filteredList[i].location)
 			//fmt.Println("fountain: ", filteredList[i].location, "len a: ", len(paths[i].a), " len b: ", len(paths[i].b))
@@ -308,12 +306,6 @@ func (m Maze) searchPathWithSteps(start, end point, steps int) (final []point) {
 				solution = append(solution, paths[i].a...)
 				solution = append(solution, paths[i].b...)
 				solutions = append(solutions, solution)
-				/*
-					final = append(final, state.path...)
-					final = append(final, paths[i].a...)
-					final = append(final, paths[i].b...)
-					return
-				*/
 			} else {
 				state.visited[filteredList[i].location] = struct{}{}
 				//fmt.Println("qualifying path")
@@ -331,26 +323,7 @@ func (m Maze) searchPathWithSteps(start, end point, steps int) (final []point) {
 
 			}
 
-			//}
-
 		}
-
-		/*
-			fmt.Println(best.a)
-			if len(best.a) == 0 {
-				return
-				//return make([]point, 0)
-			}
-			final = append(final, best.a...)
-			end = best.a[len(best.a)-1]
-			counter += 1
-			if counter > 50 {
-				fmt.Println("counter expired")
-				final = append(final, best.b...)
-				return
-				//return make([]point, 0)
-			}
-		*/
 	}
 	fmt.Println("Solutions: ", len(solutions))
 	if len(solutions) >= 1 {

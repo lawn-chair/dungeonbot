@@ -53,6 +53,7 @@ func detectPixelType(img image.Image, rect image.Rectangle) uint8 {
 	red = math.Floor(red / rectArea)
 	green = math.Floor(green / rectArea)
 	blue = math.Floor(blue / rectArea)
+
 	if red < 50 && green < 50 && blue < 50 {
 		return tWALL
 	} else if red > 200 && green > 200 && blue > 200 {
@@ -61,7 +62,7 @@ func detectPixelType(img image.Image, rect image.Rectangle) uint8 {
 		return tBONFIRE
 	} else if red > 200 {
 		return tBOSS
-	} else if green > 200 && blue > 100 {
+	} else if green > 200 && blue >= 100 {
 		return tCHEST
 	} else if green > 160 {
 		return tFOUNTAIN

@@ -143,6 +143,7 @@ func (m Maze) SearchByScribble(scribble string) Scribble {
 	return state
 }
 
+// returns list of points that can be travelled to from the specified point
 func (m Maze) neighbors(p point) (ret []point) {
 	possible := []point{
 		{p.X - 1, p.Y},
@@ -159,6 +160,7 @@ func (m Maze) neighbors(p point) (ret []point) {
 	return
 }
 
+// absolute value
 func abs(x int) int {
 	if x < 0 {
 		return -x
@@ -166,10 +168,12 @@ func abs(x int) int {
 	return x
 }
 
+// simple distance between two points
 func heuristic(a, b point) int {
 	return abs(a.X-b.X) + abs(a.Y-b.Y)
 }
 
+// defines travel cost for various types of points. Lower is better.
 func travelCost(p uint8) int {
 	switch p {
 	case tCHEST:
@@ -183,6 +187,7 @@ func travelCost(p uint8) int {
 	}
 }
 
+// Simple A* search for best path from start to end
 func (m Maze) searchPathAStar(start, end point) []point {
 	startItem := Item{
 		start,
@@ -239,6 +244,7 @@ type fullPath struct {
 	b []point
 }
 
+// filter a list based on a test function
 func filter[T any](ss []T, test func(T) bool) (ret []T) {
 	for _, s := range ss {
 		if test(s) {
@@ -254,6 +260,11 @@ type searchState struct {
 	visited map[point]struct{}
 }
 
+// search for a path from start to end not exceeding <steps> between fountains
+// we start with a list of all fountains, sort them by distance from the end point
+// then find the best path to the 20 closest fountains, as well as a path from the start
+// if the fountain is more than <steps> away or there's no valid path to be found, discard this path
+// otherwise, add this location to the stack, and repeat the algorithm for every fountain on the stack.
 func (m Maze) searchPathWithSteps(start, end point, steps int) (final []point) {
 	if len(m.Fountains) == 0 {
 		return make([]point, 0)

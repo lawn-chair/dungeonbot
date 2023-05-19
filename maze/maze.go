@@ -29,10 +29,10 @@ const (
 type Maze struct {
 	Pixels    [][]uint8     `json:"pixels"`
 	Types     map[uint8]int `json:"types"`
-	Boss      point         `json:"boss"`
-	Chests    []point       `json:"chests"`
-	Fountains []point       `json:"fountains"`
-	Mobs      []point       `json:"mobs"`
+	Boss      Point         `json:"boss"`
+	Chests    []Point       `json:"chests"`
+	Fountains []Point       `json:"fountains"`
+	Mobs      []Point       `json:"mobs"`
 }
 
 func detectPixelType(img image.Image, rect image.Rectangle) uint8 {
@@ -87,7 +87,7 @@ func (m *Maze) Load(img image.Image) {
 		m.Pixels[y/5] = make([]uint8, img.Bounds().Max.X/5)
 		for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x += 5 {
 			p := detectPixelType(img, image.Rect(x+1, y+1, x+4, y+4))
-			here := point{x / 5, y / 5}
+			here := Point{x / 5, y / 5}
 			switch p {
 			case tBOSS:
 				m.Boss = here
@@ -138,7 +138,7 @@ func (m Maze) SearchByScribble(scribble string) Scribble {
 			}
 
 			if match {
-				state.Matches = append(state.Matches, point{x, y})
+				state.Matches = append(state.Matches, Point{x, y})
 			}
 		}
 	}
@@ -147,8 +147,8 @@ func (m Maze) SearchByScribble(scribble string) Scribble {
 }
 
 // returns list of points that can be travelled to from the specified point
-func (m Maze) neighbors(p point) (ret []point) {
-	possible := []point{
+func (m Maze) neighbors(p Point) (ret []Point) {
+	possible := []Point{
 		{p.X - 1, p.Y},
 		{p.X + 1, p.Y},
 		{p.X, p.Y - 1},
@@ -156,6 +156,9 @@ func (m Maze) neighbors(p point) (ret []point) {
 	}
 
 	for _, p := range possible {
+		if p.X == -1 || p.Y == -1 {
+			continue
+		}
 		if m.Pixels[p.Y][p.X] != tWALL {
 			ret = append(ret, p)
 		}
@@ -172,7 +175,7 @@ func abs(x int) int {
 }
 
 // simple distance between two points
-func heuristic(a, b point) int {
+func heuristic(a, b Point) int {
 	return abs(a.X-b.X) + abs(a.Y-b.Y)
 }
 
@@ -191,7 +194,7 @@ func travelCost(p uint8) int {
 }
 
 // Simple A* search for best path from start to end
-func (m Maze) searchPathAStar(start, end point) []point {
+func (m Maze) searchPathAStar(start, end Point) []Point {
 	startItem := Item{
 		start,
 		0,
@@ -201,8 +204,8 @@ func (m Maze) searchPathAStar(start, end point) []point {
 
 	frontier.Enqueue(&startItem)
 
-	came_from := make(map[point]point)
-	cost_so_far := make(map[point]int)
+	came_from := make(map[Point]Point)
+	cost_so_far := make(map[Point]int)
 
 	came_from[startItem.p] = startItem.p
 	cost_so_far[startItem.p] = 0
@@ -231,20 +234,20 @@ func (m Maze) searchPathAStar(start, end point) []point {
 
 	if _, exists := came_from[end]; exists {
 		//fmt.Println("Found path")
-		path := []point{end}
+		path := []Point{end}
 		for last := came_from[end]; last != startItem.p; last = came_from[last] {
 			path = append(path, last)
 		}
 		path = append(path, startItem.p)
 		return path
 	} else {
-		return make([]point, 0)
+		return make([]Point, 0)
 	}
 }
 
 type fullPath struct {
-	a []point
-	b []point
+	a []Point
+	b []Point
 }
 
 // filter a list based on a test function
@@ -258,9 +261,9 @@ func filter[T any](ss []T, test func(T) bool) (ret []T) {
 }
 
 type searchState struct {
-	end     point
-	path    []point
-	visited map[point]struct{}
+	end     Point
+	path    []Point
+	visited map[Point]struct{}
 }
 
 // search for a path from start to end not exceeding <steps> between fountains
@@ -268,17 +271,17 @@ type searchState struct {
 // then find the best path to the 20 closest fountains, as well as a path from the start
 // if the fountain is more than <steps> away or there's no valid path to be found, discard this path
 // otherwise, add this location to the stack, and repeat the algorithm for every fountain on the stack.
-func (m Maze) searchPathWithSteps(start, end point, steps int) (final []point) {
+func (m Maze) searchPathWithSteps(start, end Point, steps int) (final []Point) {
 	if len(m.Fountains) == 0 {
-		return make([]point, 0)
+		return make([]Point, 0)
 	}
 	list := make(itemList, len(m.Fountains))
 	//counter := 0
 	stack := make([]searchState, 1)
 
-	stack[0] = searchState{end, make([]point, 0), make(map[point]struct{})}
+	stack[0] = searchState{end, make([]Point, 0), make(map[Point]struct{})}
 
-	solutions := make([][]point, 0)
+	solutions := make([][]Point, 0)
 	for len(stack) > 0 {
 		//fmt.Println("Stack length: ", len(stack))
 		state := stack[len(stack)-1]
@@ -316,7 +319,7 @@ func (m Maze) searchPathWithSteps(start, end point, steps int) (final []point) {
 
 			if len(paths[i].b) <= steps {
 				fmt.Println("winner")
-				solution := make([]point, 0, len(state.path)+len(paths[i].a)+len(paths[i].b))
+				solution := make([]Point, 0, len(state.path)+len(paths[i].a)+len(paths[i].b))
 				solution = append(solution, state.path...)
 				solution = append(solution, paths[i].a...)
 				solution = append(solution, paths[i].b...)
@@ -328,7 +331,7 @@ func (m Maze) searchPathWithSteps(start, end point, steps int) (final []point) {
 				//lowestTotal = len(paths[i].a) + len(paths[i].b)
 				//best = paths[i]
 				//fmt.Println(best.a[0], filteredList[i])]
-				tmp := make([]point, 0, len(state.path)+len(paths[i].a))
+				tmp := make([]Point, 0, len(state.path)+len(paths[i].a))
 				tmp = append(tmp, state.path...)
 				tmp = append(tmp, paths[i].a...)
 				stack = append(stack, searchState{
@@ -342,7 +345,7 @@ func (m Maze) searchPathWithSteps(start, end point, steps int) (final []point) {
 	}
 	fmt.Println("Solutions: ", len(solutions))
 	if len(solutions) >= 1 {
-		var bestPath []point
+		var bestPath []Point
 		shortest := 1000
 		for _, path := range solutions {
 			fmt.Println(len(path))
@@ -354,25 +357,20 @@ func (m Maze) searchPathWithSteps(start, end point, steps int) (final []point) {
 		return bestPath
 	}
 
-	return make([]point, 0)
+	return make([]Point, 0)
 }
 
-func (m Maze) FindPathToBossFrom(s *Scribble) ([]point, error) {
-	value := m.searchPathWithSteps(
-		point{s.Matches[0].X + s.PlayerLocation.X, s.Matches[0].Y + s.PlayerLocation.Y},
-		m.Boss, 35)
+func (m Maze) FindPath(from, to Point) ([]Point, error) {
+	value := m.searchPathWithSteps(from, to, 35)
 	if len(value) == 0 {
-		value = m.searchPathAStar(
-			point{s.Matches[0].X + s.PlayerLocation.X, s.Matches[0].Y + s.PlayerLocation.Y},
-			m.Boss)
+		value = m.searchPathAStar(from, to)
 		return value, errors.New("no path found when counting steps, providing shortest path")
 	}
-
 	return value, nil
 }
 
 type itemDistance struct {
-	location point
+	location Point
 	distance int
 }
 
@@ -382,56 +380,27 @@ func (c itemList) Len() int           { return len(c) }
 func (c itemList) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
 func (c itemList) Less(i, j int) bool { return c[i].distance < c[j].distance }
 
-func (m Maze) FindPathToChestFrom(s *Scribble) []point {
-	player := point{s.Matches[0].X + s.PlayerLocation.X, s.Matches[0].Y + s.PlayerLocation.Y}
+func Nearest(thing []Point, location Point, count int) []Point {
 
-	list := make(itemList, len(m.Chests))
+	list := make(itemList, len(thing))
 
-	for c := range m.Chests {
+	for c := range thing {
 		list[c] = itemDistance{
-			m.Chests[c],
-			heuristic(player, m.Chests[c]),
+			thing[c],
+			heuristic(location, thing[c]),
 		}
 	}
 
 	sort.Sort(list)
 	fmt.Println(list)
-	return m.searchPathAStar(player, list[0].location)
 
-}
+	things := make([]Point, count)
 
-func (m Maze) FindPathToMobFrom(s *Scribble) []point {
-	player := point{s.Matches[0].X + s.PlayerLocation.X, s.Matches[0].Y + s.PlayerLocation.Y}
-
-	list := make(itemList, len(m.Mobs))
-
-	for c := range m.Mobs {
-		list[c] = itemDistance{
-			m.Mobs[c],
-			heuristic(player, m.Mobs[c]),
-		}
+	for c := 0; c < count; c++ {
+		things[c] = list[c].location
 	}
 
-	sort.Sort(list)
-	fmt.Println(list)
-	return m.searchPathAStar(player, list[0].location)
-
-}
-
-func (m Maze) FindPathTo(what string, s *Scribble) ([]point, error) {
-	switch what {
-	case "boss":
-		return m.FindPathToBossFrom(s)
-	case "chest":
-		return m.FindPathToChestFrom(s), nil
-	case "mob":
-		return m.FindPathToMobFrom(s), nil
-	case "shortest":
-		player := point{s.Matches[0].X + s.PlayerLocation.X, s.Matches[0].Y + s.PlayerLocation.Y}
-		return m.searchPathAStar(player, m.Boss), nil
-	default:
-		return make([]point, 0), nil
-	}
+	return things
 }
 
 func (m Maze) ColorModel() color.Model {
@@ -474,15 +443,15 @@ func mazeColorMap(val uint8) color.Color {
 	}
 }
 
-type point struct {
+type Point struct {
 	X int
 	Y int
 }
 
 type Scribble struct {
 	Points         [][]uint8 `json:"points"`
-	PlayerLocation point     `json:"playerLocation"`
-	Matches        []point   `json:"matches"`
+	PlayerLocation Point     `json:"playerLocation"`
+	Matches        []Point   `json:"matches"`
 }
 
 func (s Scribble) ColorModel() color.Model {
@@ -506,7 +475,7 @@ func (s Scribble) String() string {
 // parse a scribble string from chat wars
 func parseScribble(scribble string) Scribble {
 	rows := strings.Split(scribble, "\n")
-	var playerLocation point
+	var playerLocation Point
 
 	scrib := make([][]uint8, len(rows))
 	for i := range rows {
@@ -530,7 +499,7 @@ func parseScribble(scribble string) Scribble {
 				scrib[i][j] = tPATH
 			case '\U0001f7e8':
 				scrib[i][j] = 254 // player overwrites other types
-				playerLocation = point{j, i}
+				playerLocation = Point{j, i}
 			case '\U0001f7e9':
 				scrib[i][j] = tFOUNTAIN
 			case '\U0001f7e7':
@@ -544,12 +513,12 @@ func parseScribble(scribble string) Scribble {
 			}
 		}
 	}
-	return Scribble{scrib, playerLocation, make([]point, 0)}
+	return Scribble{scrib, playerLocation, make([]Point, 0)}
 }
 
 // An Item is something we manage in a priority queue.
 type Item struct {
-	p        point // The value of the item; arbitrary.
+	p        Point // The value of the item; arbitrary.
 	priority int   // The priority of the item in the queue.
 }
 

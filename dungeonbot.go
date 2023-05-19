@@ -23,7 +23,10 @@ import (
 
 	cwmaze "dungeonbot/maze"
 
+	"github.com/fogleman/gg"
+	"github.com/golang/freetype/truetype"
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/image/font/gofont/goregular"
 )
 
 type TGBot struct {
@@ -315,24 +318,27 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 				ChatID int64 `json:"chat_id"`
 			}{body.Message.Chat.ID}, sendPic)
 			*/
+
 			// create the composite image with the map and scribbles highlighted
 			composite := image.NewRGBA(image.Rect(0, 0, maze.Bounds().Dx(), maze.Bounds().Dy()))
 			draw.Draw(composite, composite.Bounds(), maze, maze.Bounds().Bounds().Min, draw.Src)
+
+			gc := gg.NewContextForRGBA(composite)
 			for _, match := range matches.Matches {
-				matchRect := image.Rect(match.X*5, match.Y*5, match.X*5+matches.Bounds().Dx(), match.Y*5+matches.Bounds().Dy())
-				draw.Draw(composite, matchRect, &image.Uniform{color.NRGBA{100, 255, 100, 150}}, composite.Bounds().Min, draw.Over)
-
-				playerX := (match.X + matches.PlayerLocation.X) * 5
-				playerY := (match.Y + matches.PlayerLocation.Y) * 5
-				playerRect := image.Rect(playerX, playerY, playerX+5, playerY+5)
-				draw.Draw(composite, playerRect, &image.Uniform{color.RGBA{255, 20, 255, 255}}, composite.Bounds().Min, draw.Src)
-
+				playerX := (float64)(match.X+matches.PlayerLocation.X) * 5
+				playerY := (float64)(match.Y+matches.PlayerLocation.Y) * 5
+				gc.DrawCircle(playerX, playerY, 20)
+				gc.SetRGBA(100, 255, 100, 150)
+				gc.SetColor(color.NRGBA{100, 255, 100, 150})
+				gc.Fill()
 			}
+
+			drawPlayerBox(composite, matches)
 
 			bot.RespondPhoto(body.Message, composite)
 
 			if len(matches.Matches) == 1 {
-				_, err := bot.Respond(body.Message, "*Location Found\\!* Try these commands for more help:\n\n\\/path to find a path to the boss using fountains\n\\/path\\_chest for a path to the nearest chest\n\\/path\\_simple for the shortest path to the boss, ignoring steps\\\n\\/path\\_mob for a path to the nearest mob")
+				_, err := bot.Respond(body.Message, "*Location Found\\!* Try these commands for more help:\n\n\\/path to find a path to the boss using fountains\n\\/path\\_chest for a path to the nearest chest\n\\/path\\_mob for a path to the nearest mob\n\nFor more options try \\/mobs or \\/chests")
 				if err != nil {
 					fmt.Println(err)
 				}
@@ -365,7 +371,7 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 
 		scribble := &cwmaze.Scribble{}
 		if err := getFromRedis(scribble, fmt.Sprintf("%d-Scribble", body.Message.Chat.ID)); err != nil {
-			bot.Respond(body.Message, "No scribble found, please forward scribble before finding a path to boss")
+			bot.Respond(body.Message, "No scribble found, please forward scribble before finding a path")
 			return
 		}
 
@@ -374,43 +380,152 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		thingToFind := "boss"
-		if strings.HasSuffix(body.Message.Text, "chest") {
-			thingToFind = "chest"
-		} else if strings.HasSuffix(body.Message.Text, "simple") {
-			thingToFind = "shortest"
-		} else if strings.HasSuffix(body.Message.Text, "mob") {
-			if len(maze.Mobs) < 1 {
-				bot.Respond(body.Message, "Maze missing mob data, resend map to populate.")
-				return
-			}
-			thingToFind = "mob"
+		re, _ := regexp.Compile(`\/path([ _]([^ _\n]+)([ _](\d+))?)?`)
+		thingToFind := maze.Boss
+		matches := re.FindAllStringSubmatch(body.Message.Text, -1)
+		location := cwmaze.Point{X: scribble.Matches[0].X + scribble.PlayerLocation.X,
+			Y: scribble.Matches[0].Y + scribble.PlayerLocation.Y}
+
+		if matches == nil {
+			bot.Respond(body.Message, "Could not parse command")
+			return
 		}
 
-		path, err := maze.FindPathTo(thingToFind, scribble)
+		switch matches[0][2] {
+		case "chest":
+			if matches[0][4] != "" {
+				num, _ := strconv.Atoi(matches[0][4])
+				thingToFind = cwmaze.Nearest(maze.Chests, location, num)[num-1]
+			} else {
+				thingToFind = cwmaze.Nearest(maze.Chests, location, 1)[0]
+			}
+		case "mob":
+			if matches[0][4] != "" {
+				num, _ := strconv.Atoi(matches[0][4])
+				thingToFind = cwmaze.Nearest(maze.Mobs, location, num)[num-1]
+			} else {
+				thingToFind = cwmaze.Nearest(maze.Mobs, location, 1)[0]
+			}
+		}
+
+		path, err := maze.FindPath(location, thingToFind)
 		if err != nil {
 			bot.Respond(body.Message, fmt.Sprint(err))
-		}
-
-		if len(path) == 0 {
-			bot.Respond(body.Message, "Sorry, no path found with step limits")
 		}
 
 		// create the composite image with the map and scribbles highlighted
 		composite := image.NewRGBA(image.Rect(0, 0, maze.Bounds().Dx(), maze.Bounds().Dy()))
 		draw.Draw(composite, composite.Bounds(), maze, maze.Bounds().Bounds().Min, draw.Src)
+		gc := gg.NewContextForRGBA(composite)
 
-		playerX := (scribble.Matches[0].X + scribble.PlayerLocation.X) * 5
-		playerY := (scribble.Matches[0].Y + scribble.PlayerLocation.Y) * 5
-		playerRect := image.Rect(playerX, playerY, playerX+5, playerY+5)
-		draw.Draw(composite, playerRect, &image.Uniform{color.RGBA{255, 20, 255, 255}}, composite.Bounds().Min, draw.Src)
+		drawPlayerBox(composite, *scribble)
 
 		for pixel := range path {
-			drawHLine(composite, color.RGBA{255, 20, 255, 255},
-				path[pixel].X*5+2, path[pixel].Y*5+3, path[pixel].X*5+4)
+			gc.DrawLine((float64)(path[pixel].X*5+2), (float64)(path[pixel].Y*5+3),
+				(float64)(path[pixel].X*5+4), (float64)(path[pixel].Y*5+3))
+			gc.SetColor(color.RGBA{255, 20, 255, 255})
+			gc.SetLineWidth(2)
+			gc.Stroke()
 		}
 
 		bot.RespondPhoto(body.Message, composite)
+
+	} else if strings.HasPrefix(body.Message.Text, "/mobs") {
+		maze := &cwmaze.Maze{}
+		if err := getFromRedis(maze, fmt.Sprint(body.Message.Chat.ID)); err != nil {
+			bot.Respond(body.Message, "No map found, please forward map before finding path")
+			return
+		}
+
+		scribble := &cwmaze.Scribble{}
+		if err := getFromRedis(scribble, fmt.Sprintf("%d-Scribble", body.Message.Chat.ID)); err != nil {
+			bot.Respond(body.Message, "No scribble found, please forward scribble before finding a path to boss")
+			return
+		}
+
+		if len(scribble.Matches) > 1 {
+			bot.Respond(body.Message, fmt.Sprintf("Scribble matches %d locations in map.  Must be 1 to find mobs", len(scribble.Matches)))
+			return
+		}
+
+		player := cwmaze.Point{X: scribble.Matches[0].X + scribble.PlayerLocation.X, Y: scribble.Matches[0].Y + scribble.PlayerLocation.Y}
+		list := cwmaze.Nearest(maze.Mobs, player, 5)
+
+		font, err := truetype.Parse(goregular.TTF)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		face := truetype.NewFace(font, &truetype.Options{Size: 16})
+
+		composite := image.NewRGBA(image.Rect(0, 0, maze.Bounds().Dx(), maze.Bounds().Dy()))
+		draw.Draw(composite, composite.Bounds(), maze, maze.Bounds().Bounds().Min, draw.Src)
+		gc := gg.NewContextForRGBA(composite)
+		gc.SetFontFace(face)
+
+		drawPlayerBox(composite, *scribble)
+
+		for c := range list {
+			gc.DrawCircle((float64)(list[c].X*5+2), (float64)(list[c].Y*5+2), 12)
+			gc.SetColor(color.NRGBA{120, 100, 255, 180})
+			gc.Fill()
+
+			gc.SetColor(color.NRGBA{255, 255, 255, 255})
+			gc.DrawString(fmt.Sprintf("%d", c+1), (float64)(list[c].X*5-2), (float64)(list[c].Y*5+8))
+		}
+		bot.RespondPhoto(body.Message, composite)
+
+		for c := range list {
+			bot.Respond(body.Message, fmt.Sprintf("\\/path\\_mob\\_%d path to mob at \\{%d, %d\\}", c+1, list[c].X, list[c].Y))
+		}
+	} else if strings.HasPrefix(body.Message.Text, "/chests") {
+		maze := &cwmaze.Maze{}
+		if err := getFromRedis(maze, fmt.Sprint(body.Message.Chat.ID)); err != nil {
+			bot.Respond(body.Message, "No map found, please forward map before finding path")
+			return
+		}
+
+		scribble := &cwmaze.Scribble{}
+		if err := getFromRedis(scribble, fmt.Sprintf("%d-Scribble", body.Message.Chat.ID)); err != nil {
+			bot.Respond(body.Message, "No scribble found, please forward scribble before finding a path")
+			return
+		}
+
+		if len(scribble.Matches) > 1 {
+			bot.Respond(body.Message, fmt.Sprintf("Scribble matches %d locations in map.  Must be 1 to find chests", len(scribble.Matches)))
+			return
+		}
+
+		player := cwmaze.Point{X: scribble.Matches[0].X + scribble.PlayerLocation.X, Y: scribble.Matches[0].Y + scribble.PlayerLocation.Y}
+		list := cwmaze.Nearest(maze.Chests, player, 5)
+
+		font, err := truetype.Parse(goregular.TTF)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		face := truetype.NewFace(font, &truetype.Options{Size: 16})
+
+		composite := image.NewRGBA(image.Rect(0, 0, maze.Bounds().Dx(), maze.Bounds().Dy()))
+		draw.Draw(composite, composite.Bounds(), maze, maze.Bounds().Bounds().Min, draw.Src)
+		gc := gg.NewContextForRGBA(composite)
+		gc.SetFontFace(face)
+
+		drawPlayerBox(composite, *scribble)
+
+		for c := range list {
+			gc.DrawCircle((float64)(list[c].X*5+2), (float64)(list[c].Y*5+2), 12)
+			gc.SetColor(color.NRGBA{120, 255, 100, 180})
+			gc.Fill()
+
+			gc.SetColor(color.NRGBA{0, 0, 0, 255})
+			gc.DrawString(fmt.Sprintf("%d", c+1), (float64)(list[c].X*5-2), (float64)(list[c].Y*5+8))
+		}
+		bot.RespondPhoto(body.Message, composite)
+
+		for c := range list {
+			bot.Respond(body.Message, fmt.Sprintf("\\/path\\_chest\\_%d path to chest at \\{%d, %d\\}", c+1, list[c].X, list[c].Y))
+		}
 
 	} else {
 		bot.Respond(body.Message, "Try forwarding a map or scribble of a dungeon")
@@ -418,6 +533,17 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 
 	// log a confirmation message if the message is sent successfully
 	fmt.Println("reply sent")
+}
+
+func drawPlayerBox(composite *image.RGBA, scribble cwmaze.Scribble) {
+	gc := gg.NewContextForRGBA(composite)
+
+	playerX := (float64)(scribble.Matches[0].X+scribble.PlayerLocation.X) * 5
+	playerY := (float64)(scribble.Matches[0].Y+scribble.PlayerLocation.Y) * 5
+
+	gc.DrawRectangle(playerX, playerY, 5, 5)
+	gc.SetColor(color.RGBA{255, 20, 255, 255})
+	gc.Fill()
 }
 
 func getFromRedis[T any](obj *T, key string) error {
@@ -433,14 +559,6 @@ func getFromRedis[T any](obj *T, key string) error {
 	}
 
 	return nil
-}
-
-// HLine draws a horizontal line
-func drawHLine(img *image.RGBA, col color.Color, x1, y, x2 int) {
-	for ; x1 <= x2; x1++ {
-		img.Set(x1, y, col)
-		img.Set(x1, y-1, col)
-	}
 }
 
 func getEnv(key string, fallback string) string {

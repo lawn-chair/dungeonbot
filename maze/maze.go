@@ -32,6 +32,7 @@ type Maze struct {
 	Boss      point         `json:"boss"`
 	Chests    []point       `json:"chests"`
 	Fountains []point       `json:"fountains"`
+	Mobs      []point       `json:"mobs"`
 }
 
 func detectPixelType(img image.Image, rect image.Rectangle) uint8 {
@@ -94,6 +95,8 @@ func (m *Maze) Load(img image.Image) {
 				m.Chests = append(m.Chests, here)
 			case tFOUNTAIN:
 				m.Fountains = append(m.Fountains, here)
+			case tMONSTER:
+				m.Mobs = append(m.Mobs, here)
 			}
 			m.Pixels[y/5][x/5] = p
 			m.Types[p]++
@@ -397,12 +400,32 @@ func (m Maze) FindPathToChestFrom(s *Scribble) []point {
 
 }
 
+func (m Maze) FindPathToMobFrom(s *Scribble) []point {
+	player := point{s.Matches[0].X + s.PlayerLocation.X, s.Matches[0].Y + s.PlayerLocation.Y}
+
+	list := make(itemList, len(m.Mobs))
+
+	for c := range m.Mobs {
+		list[c] = itemDistance{
+			m.Mobs[c],
+			heuristic(player, m.Mobs[c]),
+		}
+	}
+
+	sort.Sort(list)
+	fmt.Println(list)
+	return m.searchPathAStar(player, list[0].location)
+
+}
+
 func (m Maze) FindPathTo(what string, s *Scribble) ([]point, error) {
 	switch what {
 	case "boss":
 		return m.FindPathToBossFrom(s)
 	case "chest":
 		return m.FindPathToChestFrom(s), nil
+	case "mob":
+		return m.FindPathToMobFrom(s), nil
 	case "shortest":
 		player := point{s.Matches[0].X + s.PlayerLocation.X, s.Matches[0].Y + s.PlayerLocation.Y}
 		return m.searchPathAStar(player, m.Boss), nil

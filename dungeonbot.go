@@ -332,7 +332,7 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 			bot.RespondPhoto(body.Message, composite)
 
 			if len(matches.Matches) == 1 {
-				_, err := bot.Respond(body.Message, "*Location Found\\!* Try these commands for more help:\n\n\\/path to find a path to the boss using fountains\n\\/path\\_chest for a path to the nearest chest\n\\/path\\_simple for the shortest path to the boss, ignoring steps")
+				_, err := bot.Respond(body.Message, "*Location Found\\!* Try these commands for more help:\n\n\\/path to find a path to the boss using fountains\n\\/path\\_chest for a path to the nearest chest\n\\/path\\_simple for the shortest path to the boss, ignoring steps\\\n\\/path\\_mob for a path to the nearest mob")
 				if err != nil {
 					fmt.Println(err)
 				}
@@ -379,6 +379,12 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 			thingToFind = "chest"
 		} else if strings.HasSuffix(body.Message.Text, "simple") {
 			thingToFind = "shortest"
+		} else if strings.HasSuffix(body.Message.Text, "mob") {
+			if len(maze.Mobs) < 1 {
+				bot.Respond(body.Message, "Maze missing mob data, resend map to populate.")
+				return
+			}
+			thingToFind = "mob"
 		}
 
 		path, err := maze.FindPathTo(thingToFind, scribble)

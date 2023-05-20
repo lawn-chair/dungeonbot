@@ -360,10 +360,10 @@ func (m Maze) searchPathWithSteps(start, end Point, steps int) (final []Point) {
 	return make([]Point, 0)
 }
 
-func (m Maze) FindPath(from, to Point) ([]Point, error) {
-	value := m.searchPathWithSteps(from, to, 35)
+func (m Maze) FindPath(from, to *Point) ([]Point, error) {
+	value := m.searchPathWithSteps(*from, *to, 35)
 	if len(value) == 0 {
-		value = m.searchPathAStar(from, to)
+		value = m.searchPathAStar(*from, *to)
 		return value, errors.New("no path found when counting steps, providing shortest path")
 	}
 	return value, nil
@@ -380,14 +380,14 @@ func (c itemList) Len() int           { return len(c) }
 func (c itemList) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
 func (c itemList) Less(i, j int) bool { return c[i].distance < c[j].distance }
 
-func Nearest(thing []Point, location Point, count int) []Point {
+func Nearest(thing []Point, location *Point, count int) []Point {
 
 	list := make(itemList, len(thing))
 
 	for c := range thing {
 		list[c] = itemDistance{
 			thing[c],
-			heuristic(location, thing[c]),
+			heuristic(*location, thing[c]),
 		}
 	}
 
@@ -446,6 +446,10 @@ func mazeColorMap(val uint8) color.Color {
 type Point struct {
 	X int
 	Y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("{%d, %d}", p.X, p.Y)
 }
 
 type Scribble struct {

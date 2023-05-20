@@ -275,6 +275,11 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 			fmt.Println(err)
 		}
 
+		err = redisClient.Del(ctx, fmt.Sprintf("%d-Location", body.Message.Chat.ID)).Err()
+		if err != nil {
+			fmt.Println(err)
+		}
+
 	} else if strings.Contains(body.Message.Text, "You stopped and tried to mark your way on paper.") {
 
 		sections := strings.Split(body.Message.Text, "\n\n")
@@ -358,20 +363,20 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 				bot.Respond(body.Message, "Failed to save scribble")
 			}
 
+			err = redisClient.Del(ctx, fmt.Sprintf("%d-Location", body.Message.Chat.ID)).Err()
+			if err != nil {
+				fmt.Println(err)
+			}
+
 		} else {
 			bot.Respond(body.Message, "There seems to be a problem with your scribble")
 		}
 
 	} else if strings.HasPrefix(body.Message.Text, "/path") {
-		maze := &cwmaze.Maze{}
-		if err := getFromRedis(maze, fmt.Sprint(body.Message.Chat.ID)); err != nil {
-			bot.Respond(body.Message, "No map found, please forward map before finding path")
-			return
-		}
+		maze, scribble, location, err := getPlayerState(body.Message)
 
-		scribble := &cwmaze.Scribble{}
-		if err := getFromRedis(scribble, fmt.Sprintf("%d-Scribble", body.Message.Chat.ID)); err != nil {
-			bot.Respond(body.Message, "No scribble found, please forward scribble before finding a path")
+		if err != nil {
+			bot.Respond(body.Message, fmt.Sprint(err))
 			return
 		}
 
@@ -383,8 +388,11 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 		re, _ := regexp.Compile(`\/path([ _]([^ _\n]+)([ _](\d+))?)?`)
 		thingToFind := maze.Boss
 		matches := re.FindAllStringSubmatch(body.Message.Text, -1)
-		location := cwmaze.Point{X: scribble.Matches[0].X + scribble.PlayerLocation.X,
-			Y: scribble.Matches[0].Y + scribble.PlayerLocation.Y}
+		if location == nil {
+			location = &cwmaze.Point{X: scribble.Matches[0].X + scribble.PlayerLocation.X,
+				Y: scribble.Matches[0].Y + scribble.PlayerLocation.Y}
+
+		}
 
 		if matches == nil {
 			bot.Respond(body.Message, "Could not parse command")
@@ -408,7 +416,7 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 			}
 		}
 
-		path, err := maze.FindPath(location, thingToFind)
+		path, err := maze.FindPath(location, &thingToFind)
 		if err != nil {
 			bot.Respond(body.Message, fmt.Sprint(err))
 		}
@@ -429,17 +437,11 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 		}
 
 		bot.RespondPhoto(body.Message, composite)
-
 	} else if strings.HasPrefix(body.Message.Text, "/mobs") {
-		maze := &cwmaze.Maze{}
-		if err := getFromRedis(maze, fmt.Sprint(body.Message.Chat.ID)); err != nil {
-			bot.Respond(body.Message, "No map found, please forward map before finding path")
-			return
-		}
+		maze, scribble, player, err := getPlayerState(body.Message)
 
-		scribble := &cwmaze.Scribble{}
-		if err := getFromRedis(scribble, fmt.Sprintf("%d-Scribble", body.Message.Chat.ID)); err != nil {
-			bot.Respond(body.Message, "No scribble found, please forward scribble before finding a path to boss")
+		if err != nil {
+			bot.Respond(body.Message, fmt.Sprint(err))
 			return
 		}
 
@@ -448,7 +450,9 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		player := cwmaze.Point{X: scribble.Matches[0].X + scribble.PlayerLocation.X, Y: scribble.Matches[0].Y + scribble.PlayerLocation.Y}
+		if player == nil {
+			player = &cwmaze.Point{X: scribble.Matches[0].X + scribble.PlayerLocation.X, Y: scribble.Matches[0].Y + scribble.PlayerLocation.Y}
+		}
 		list := cwmaze.Nearest(maze.Mobs, player, 5)
 
 		font, err := truetype.Parse(goregular.TTF)
@@ -476,18 +480,13 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 		bot.RespondPhoto(body.Message, composite)
 
 		for c := range list {
-			bot.Respond(body.Message, fmt.Sprintf("\\/path\\_mob\\_%d path to mob at \\{%d, %d\\}", c+1, list[c].X, list[c].Y))
+			bot.Respond(body.Message, fmt.Sprintf("\\/path\\_mob\\_%d path to mob at \\{%d, %d\\} \\/at\\_%d\\_%d", c+1, list[c].X, list[c].Y, list[c].X, list[c].Y))
 		}
 	} else if strings.HasPrefix(body.Message.Text, "/chests") {
-		maze := &cwmaze.Maze{}
-		if err := getFromRedis(maze, fmt.Sprint(body.Message.Chat.ID)); err != nil {
-			bot.Respond(body.Message, "No map found, please forward map before finding path")
-			return
-		}
+		maze, scribble, player, err := getPlayerState(body.Message)
 
-		scribble := &cwmaze.Scribble{}
-		if err := getFromRedis(scribble, fmt.Sprintf("%d-Scribble", body.Message.Chat.ID)); err != nil {
-			bot.Respond(body.Message, "No scribble found, please forward scribble before finding a path")
+		if err != nil {
+			bot.Respond(body.Message, fmt.Sprint(err))
 			return
 		}
 
@@ -496,7 +495,9 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		player := cwmaze.Point{X: scribble.Matches[0].X + scribble.PlayerLocation.X, Y: scribble.Matches[0].Y + scribble.PlayerLocation.Y}
+		if player == nil {
+			player = &cwmaze.Point{X: scribble.Matches[0].X + scribble.PlayerLocation.X, Y: scribble.Matches[0].Y + scribble.PlayerLocation.Y}
+		}
 		list := cwmaze.Nearest(maze.Chests, player, 5)
 
 		font, err := truetype.Parse(goregular.TTF)
@@ -524,15 +525,58 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 		bot.RespondPhoto(body.Message, composite)
 
 		for c := range list {
-			bot.Respond(body.Message, fmt.Sprintf("\\/path\\_chest\\_%d path to chest at \\{%d, %d\\}", c+1, list[c].X, list[c].Y))
+			bot.Respond(body.Message, fmt.Sprintf("\\/path\\_chest\\_%d path to chest at \\{%d, %d\\} /at\\_%d\\_%d", c+1, list[c].X, list[c].Y, list[c].X, list[c].Y))
+		}
+	} else if strings.HasPrefix(body.Message.Text, "/at") {
+		re, _ := regexp.Compile(`\/at[ _](\d+)[ ,_]+(\d+)`)
+		matches := re.FindAllStringSubmatch(body.Message.Text, -1)
+
+		if matches == nil || matches[0][1] == "" || matches[0][2] == "" {
+			bot.Respond(body.Message, "Could not parse command")
+			return
 		}
 
+		x, _ := strconv.Atoi(matches[0][1])
+		y, _ := strconv.Atoi(matches[0][2])
+
+		location := cwmaze.Point{X: x, Y: y}
+		locationJson, err := json.Marshal(location)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		err = redisClient.Set(ctx, fmt.Sprintf("%d-Location", body.Message.Chat.ID), locationJson, 0).Err()
+		if err != nil {
+			fmt.Println(err)
+			bot.Respond(body.Message, "Failed to save location")
+		} else {
+			bot.Respond(body.Message, EscapeString(fmt.Sprintf("Location set: %s", location)))
+		}
 	} else {
 		bot.Respond(body.Message, "Try forwarding a map or scribble of a dungeon")
 	}
 
 	// log a confirmation message if the message is sent successfully
 	fmt.Println("reply sent")
+}
+
+func getPlayerState(message TGMessage) (*cwmaze.Maze, *cwmaze.Scribble, *cwmaze.Point, error) {
+	maze := &cwmaze.Maze{}
+	if err := getFromRedis(maze, fmt.Sprint(message.Chat.ID)); err != nil {
+		return nil, nil, nil, errors.New("No map found, please forward map before taking other actions")
+	}
+
+	scribble := &cwmaze.Scribble{}
+	if err := getFromRedis(scribble, fmt.Sprintf("%d-Scribble", message.Chat.ID)); err != nil {
+		return maze, nil, nil, errors.New("No scribble found, please forward scribble before taking other actions")
+	}
+
+	location := &cwmaze.Point{}
+	if err := getFromRedis(location, fmt.Sprintf("%d-Location", message.Chat.ID)); err != nil {
+		location = nil
+	}
+
+	return maze, scribble, location, nil
 }
 
 func drawPlayerBox(composite *image.RGBA, scribble cwmaze.Scribble) {

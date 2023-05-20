@@ -395,6 +395,9 @@ func Nearest(thing []Point, location *Point, count int) []Point {
 	fmt.Println(list)
 
 	things := make([]Point, count)
+	if list[0].location == *location {
+		list = list[1:]
+	}
 
 	for c := 0; c < count; c++ {
 		things[c] = list[c].location

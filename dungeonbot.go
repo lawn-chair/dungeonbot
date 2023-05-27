@@ -153,9 +153,9 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 				gc.SetRGBA(100, 255, 100, 150)
 				gc.SetColor(color.NRGBA{100, 255, 100, 150})
 				gc.Fill()
-			}
 
-			drawPlayerBox(composite, matches)
+				drawPlayerBox(composite, &cwmaze.Point{X: match.X + matches.PlayerLocation.X, Y: match.Y + matches.PlayerLocation.Y})
+			}
 
 			bot.RespondPhoto(body.Message, composite)
 
@@ -251,7 +251,7 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 		draw.Draw(composite, composite.Bounds(), maze, maze.Bounds().Bounds().Min, draw.Src)
 		gc := gg.NewContextForRGBA(composite)
 
-		drawPlayerBox(composite, *scribble)
+		drawPlayerBox(composite, location)
 
 		for pixel := range path {
 			gc.DrawLine((float64)(path[pixel].X*5+2), (float64)(path[pixel].Y*5+3),
@@ -292,7 +292,7 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 		gc := gg.NewContextForRGBA(composite)
 		gc.SetFontFace(face)
 
-		drawPlayerBox(composite, *scribble)
+		drawPlayerBox(composite, player)
 
 		for c := range list {
 			gc.DrawCircle((float64)(list[c].X*5+2), (float64)(list[c].Y*5+2), 12)
@@ -337,7 +337,7 @@ func Handler(res http.ResponseWriter, req *http.Request) {
 		gc := gg.NewContextForRGBA(composite)
 		gc.SetFontFace(face)
 
-		drawPlayerBox(composite, *scribble)
+		drawPlayerBox(composite, player)
 
 		for c := range list {
 			gc.DrawCircle((float64)(list[c].X*5+2), (float64)(list[c].Y*5+2), 12)
@@ -414,13 +414,10 @@ func getPlayerState(message tgbot.Message) (*cwmaze.Maze, *cwmaze.Scribble, *cwm
 	return maze, scribble, location, nil
 }
 
-func drawPlayerBox(composite *image.RGBA, scribble cwmaze.Scribble) {
+func drawPlayerBox(composite *image.RGBA, player *cwmaze.Point) {
 	gc := gg.NewContextForRGBA(composite)
 
-	playerX := (float64)(scribble.Matches[0].X+scribble.PlayerLocation.X) * 5
-	playerY := (float64)(scribble.Matches[0].Y+scribble.PlayerLocation.Y) * 5
-
-	gc.DrawRectangle(playerX, playerY, 5, 5)
+	gc.DrawRectangle(float64(player.X)*5, float64(player.Y)*5, 5, 5)
 	gc.SetColor(color.RGBA{255, 20, 255, 255})
 	gc.Fill()
 }

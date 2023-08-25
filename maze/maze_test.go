@@ -33,28 +33,28 @@ func TestPathFinder(t *testing.T) {
 		Matches:        []Point{{89, 81}},
 	}
 
-	fmt.Println(m.FindPathToBossFrom(&s))
+	fmt.Println(m.FindPath(&s.PlayerLocation, &m.Boss))
 
 	s = Scribble{
 		PlayerLocation: Point{0, 0},
 		Matches:        []Point{{87, 82}},
 	}
 
-	fmt.Println(m.FindPathToBossFrom(&s))
+	fmt.Println(m.FindPath(&s.PlayerLocation, &m.Boss))
 
 	s = Scribble{
 		PlayerLocation: Point{0, 0},
 		Matches:        []Point{{1, 1}},
 	}
 
-	fmt.Println(m.FindPathToBossFrom(&s))
+	fmt.Println(m.FindPath(&s.PlayerLocation, &m.Boss))
 
 	s = Scribble{
 		PlayerLocation: Point{0, 1},
 		Matches:        []Point{{1, 4}},
 	}
 
-	fmt.Println(m.FindPathToBossFrom(&s))
+	fmt.Println(m.FindPath(&s.PlayerLocation, &m.Boss))
 
 }
 

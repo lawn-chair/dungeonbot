@@ -17,7 +17,8 @@ import (
 	"strings"
 
 	cwmaze "dungeonbot/maze"
-	"dungeonbot/tgbot"
+
+	"github.com/lawn-chair/gobot/tgbot"
 
 	"github.com/fogleman/gg"
 	"github.com/golang/freetype/truetype"
